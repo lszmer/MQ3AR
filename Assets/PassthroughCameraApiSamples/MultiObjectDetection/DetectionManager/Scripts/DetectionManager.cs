@@ -15,6 +15,7 @@ namespace PassthroughCameraSamples.MultiObjectDetection
 
         [Header("Controls configuration")]
         [SerializeField] private OVRInput.RawButton m_actionButton = OVRInput.RawButton.A;
+		[SerializeField] private OVRInput.RawButton m_nextModelButton = OVRInput.RawButton.X;
 
         [Header("Ui references")]
         [SerializeField] private DetectionUiMenuManager m_uiMenuManager;
@@ -65,13 +66,18 @@ namespace PassthroughCameraSamples.MultiObjectDetection
                     m_isStarted = true;
                 }
             }
-            else
+			else
             {
                 // Press A button to spawn 3d markers
                 if (OVRInput.GetUp(m_actionButton) && m_delayPauseBackTime <= 0)
                 {
                     SpwanCurrentDetectedObjects();
                 }
+				// Press X to cycle model
+				if (OVRInput.GetUp(m_nextModelButton) && m_delayPauseBackTime <= 0)
+				{
+					m_runInference.NextModel();
+				}
                 // Cooldown for the A button after return from the pause menu
                 m_delayPauseBackTime -= Time.deltaTime;
                 if (m_delayPauseBackTime <= 0)

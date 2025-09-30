@@ -14,7 +14,9 @@ namespace PassthroughCameraSamples.MultiObjectDetection
         [Header("Sentis Model config")]
         [SerializeField] private Vector2Int m_inputSize = new(640, 640);
         [SerializeField] private BackendType m_backend = BackendType.CPU;
-        [SerializeField] private ModelAsset m_sentisModel;
+		[SerializeField] private ModelAsset m_sentisModel;
+		[SerializeField] private ModelAsset[] m_availableModels;
+		[SerializeField] private string[] m_modelDisplayNames;
         [SerializeField] private int m_layersPerFrame = 25;
         [SerializeField] private TextAsset m_labelsAsset;
         public bool IsModelLoaded { get; private set; } = false;
@@ -28,7 +30,7 @@ namespace PassthroughCameraSamples.MultiObjectDetection
         [SerializeField, Range(0, 1)] private float m_scoreThreshold = 0.23f;
         [Space(40)]
 
-        private Worker m_engine;
+		private Worker m_engine;
         private IEnumerator m_schedule;
         private bool m_started = false;
         private Tensor<float> m_input;
@@ -47,7 +49,13 @@ namespace PassthroughCameraSamples.MultiObjectDetection
             yield return new WaitForSeconds(0.05f);
 
             m_uiInference.SetLabels(m_labelsAsset);
-            LoadModel();
+			// Load saved model selection if any
+			var saved = PlayerPrefs.GetInt("SentisModelIndex", -1);
+			if (saved >= 0 && m_availableModels != null && saved < m_availableModels.Length)
+			{
+				m_sentisModel = m_availableModels[saved];
+			}
+			LoadModel();
         }
 
         private void Update()
@@ -96,10 +104,10 @@ namespace PassthroughCameraSamples.MultiObjectDetection
         #endregion
 
         #region Inference Functions
-        private void LoadModel()
+		private void LoadModel()
         {
-            //Load model
-            var model = ModelLoader.Load(m_sentisModel);
+			//Load model
+			var model = ModelLoader.Load(m_sentisModel);
             Debug.Log($"Sentis model loaded correctly with iouThreshold: {m_iouThreshold} and scoreThreshold: {m_scoreThreshold}");
             //Create engine to run model
             m_engine = new Worker(model, m_backend);
@@ -108,6 +116,71 @@ namespace PassthroughCameraSamples.MultiObjectDetection
             m_engine.Schedule(input);
             IsModelLoaded = true;
         }
+
+		public int GetCurrentModelIndex()
+		{
+			for (var i = 0; i < (m_availableModels != null ? m_availableModels.Length : 0); i++)
+			{
+				if (m_availableModels[i] == m_sentisModel)
+				{
+					return i;
+				}
+			}
+			return -1;
+		}
+
+		public string GetCurrentModelName()
+		{
+			var idx = GetCurrentModelIndex();
+			if (idx >= 0 && m_modelDisplayNames != null && idx < m_modelDisplayNames.Length)
+			{
+				return m_modelDisplayNames[idx];
+			}
+			return m_sentisModel != null ? m_sentisModel.name : "<none>";
+		}
+
+		public void SetModelByIndex(int index)
+		{
+			if (m_availableModels == null || index < 0 || index >= m_availableModels.Length)
+			{
+				Debug.LogWarning("Invalid model index");
+				return;
+			}
+			StartCoroutine(SwitchModelCoroutine(index));
+		}
+
+		public void NextModel()
+		{
+			if (m_availableModels == null || m_availableModels.Length == 0)
+				return;
+			var idx = GetCurrentModelIndex();
+			var next = (idx + 1 + m_availableModels.Length) % m_availableModels.Length;
+			SetModelByIndex(next);
+		}
+
+		private IEnumerator SwitchModelCoroutine(int index)
+		{
+			// Stop current run if any
+			m_started = false;
+			// Dispose old resources
+			m_schedule = null;
+			m_input?.Dispose();
+			m_output?.Dispose();
+			m_labelIDs?.Dispose();
+			m_pullOutput = null;
+			m_pullLabelIDs = null;
+			m_engine?.Dispose();
+			IsModelLoaded = false;
+
+			// Small delay to ensure GPU backend releases
+			yield return null;
+
+			m_sentisModel = m_availableModels[index];
+			PlayerPrefs.SetInt("SentisModelIndex", index);
+			PlayerPrefs.Save();
+
+			LoadModel();
+		}
 
         private void InferenceUpdate()
         {

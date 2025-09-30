@@ -25,6 +25,9 @@ namespace PassthroughCameraSamples.MultiObjectDetection
         [SerializeField] private Font m_font;
         [SerializeField] private Color m_fontColor;
         [SerializeField] private int m_fontSize = 80;
+		[SerializeField] private Text m_fpsText;
+		[SerializeField] private int m_fpsFontSize = 60;
+		[SerializeField] private Color m_fpsColor = Color.white;
         [Space(10)]
         public UnityEvent<int> OnObjectsDetected;
 
@@ -33,6 +36,8 @@ namespace PassthroughCameraSamples.MultiObjectDetection
         private string[] m_labels;
         private List<GameObject> m_boxPool = new();
         private Transform m_displayLocation;
+		private bool m_fpsInitialized = false;
+		private float m_smoothedDelta = 0.016f;
 
         //bounding box data
         public struct BoundingBox
@@ -51,6 +56,42 @@ namespace PassthroughCameraSamples.MultiObjectDetection
         {
             m_displayLocation = m_displayImage.transform;
         }
+
+		private void LateUpdate()
+		{
+			// Update FPS counter if available
+			if (!m_fpsInitialized)
+			{
+				EnsureFpsText();
+			}
+			if (m_fpsText != null)
+			{
+				m_smoothedDelta = Mathf.Lerp(m_smoothedDelta, Time.unscaledDeltaTime, 0.1f);
+				var fps = 1.0f / Mathf.Max(0.0001f, m_smoothedDelta);
+				m_fpsText.text = $"{fps:0.0} FPS";
+			}
+		}
+
+		private void EnsureFpsText()
+		{
+			if (m_fpsText == null && m_displayLocation != null)
+			{
+				var go = new GameObject("FPS");
+				_ = go.AddComponent<CanvasRenderer>();
+				go.transform.SetParent(m_displayLocation, false);
+				m_fpsText = go.AddComponent<Text>();
+				m_fpsText.font = m_font;
+				m_fpsText.color = m_fpsColor;
+				m_fpsText.fontSize = m_fpsFontSize;
+				m_fpsText.alignment = TextAnchor.UpperLeft;
+				var rt = go.GetComponent<RectTransform>();
+				rt.anchorMin = new Vector2(0, 1);
+				rt.anchorMax = new Vector2(0, 1);
+				rt.pivot = new Vector2(0, 1);
+				rt.anchoredPosition = new Vector2(20, -20);
+			}
+			m_fpsInitialized = true;
+		}
         #endregion
 
         #region Detection Functions
